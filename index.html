@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="PokéVault"/>
+<meta name="theme-color" content="#08080f"/>
+<title>PokéVault</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700;800;900&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:#08080f;font-family:'Rajdhani','Segoe UI',sans-serif;color:#e2e8f0;overflow-x:hidden}
+  input::placeholder{color:#3a4555}
+  @keyframes fadein{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .ch{transition:all .25s;cursor:pointer}
+  .ch:active{transform:scale(0.97);opacity:0.9}
+  .rh{transition:background .15s;cursor:pointer}
+  .rh:active{background:rgba(255,255,255,0.07)!important}
+  button{cursor:pointer}
+  button:active{opacity:.75}
+  select{appearance:none;-webkit-appearance:none}
+  ::-webkit-scrollbar{width:4px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef}=React;
+
+const LANGUAGES=[“Deutsch”,“Englisch”,“Japanisch”,“Französisch”,“Spanisch”];
+const LANG_MULT={Deutsch:1.0,Englisch:0.85,Japanisch:1.3,Französisch:0.9,Spanisch:0.8};
+
+function genPrice(base,lang){
+return Math.max(0.1,parseFloat((base*(LANG_MULT[lang]||1)*(0.88+Math.random()*0.24)).toFixed(2)));
+}
+function genHistory(cur){
+const h=[],now=Date.now();let p=cur*(1+(Math.random()*0.3-0.08));
+for(let i=29;i>=0;i–){
+p=Math.max(0.1,p+(Math.random()-0.48)*p*0.06);
+h.push({d:new Date(now-i*86400000).toLocaleDateString(“de-DE”),p:parseFloat(p.toFixed(2))});
+}
+h[h.length-1].p=cur;return h;
+}
+function buildPrices(base){
+const prices={},history={};
+LANGUAGES.forEach(l=>{prices[l]=genPrice(base,l);history[l]=genHistory(prices[l]);});
+return {prices,history};
+}
+function getBasePrice(card){
+return card.cardmarket?.prices?.averageSellPrice
+||card.tcgplayer?.prices?.holofoil?.market
+||card.tcgplayer?.prices?.normal?.market
+||card.basePrice||2;
+}
+
+const BUILTIN=[
+{id:“sv6-205”,name:“Mew ex”,number:“205”,set:“Twilight Masquerade”,series:“Scarlet & Violet”,rarity:“Special Illustration Rare”,types:[“Psycho”],hp:“200”,basePrice:55,img:“https://images.pokemontcg.io/sv6/205.png”},
+{id:“sv6-232”,name:“Mew ex”,number:“232”,set:“Twilight Masquerade”,series:“Scarlet & Violet”,rarity:“Hyper Rare”,types:[“Psycho”],hp:“200”,basePrice:30,img:“https://images.pokemontcg.io/sv6/232.png”},
+{id:“sv3pt5-183”,name:“Charizard ex”,number:“183”,set:“151”,series:“Scarlet & Violet”,rarity:“Special Illustration Rare”,types:[“Feuer”],hp:“330”,basePrice:120,img:“https://images.pokemontcg.io/sv3pt5/183.png”},
+{id:“sv3pt5-215”,name:“Charizard ex”,number:“215”,set:“151”,series:“Scarlet & Violet”,rarity:“Hyper Rare”,types:[“Feuer”],hp:“330”,basePrice:65,img:“https://images.pokemontcg.io/sv3pt5/215.png”},
+{id:“sv3pt5-6”,name:“Charizard ex”,number:“6”,set:“151”,series:“Scarlet & Violet”,rarity:“Rare Holo EX”,types:[“Feuer”],hp:“330”,basePrice:18,img:“https://images.pokemontcg.io/sv3pt5/6.png”},
+{id:“base1-4”,name:“Charizard”,number:“4”,set:“Base Set”,series:“Base”,rarity:“Rare Holo”,types:[“Feuer”],hp:“120”,basePrice:350,img:“https://images.pokemontcg.io/base1/4.png”},
+{id:“swsh35-19”,name:“Charizard V”,number:“19”,set:“Champion’s Path”,series:“Sword & Shield”,rarity:“Rare Ultra”,types:[“Feuer”],hp:“220”,basePrice:35,img:“https://images.pokemontcg.io/swsh35/19.png”},
+{id:“sv3pt5-94”,name:“Pikachu”,number:“94”,set:“151”,series:“Scarlet & Violet”,rarity:“Common”,types:[“Elektro”],hp:“70”,basePrice:0.3,img:“https://images.pokemontcg.io/sv3pt5/94.png”},
+{id:“sv3pt5-194”,name:“Pikachu”,number:“194”,set:“151”,series:“Scarlet & Violet”,rarity:“Special Illustration Rare”,types:[“Elektro”],hp:“70”,basePrice:25,img:“https://images.pokemontcg.io/sv3pt5/194.png”},
+{id:“swsh10-215”,name:“Umbreon VMAX”,number:“215”,set:“Astral Radiance”,series:“Sword & Shield”,rarity:“Rare Rainbow”,types:[“Finsternis”],hp:“340”,basePrice:80,img:“https://images.pokemontcg.io/swsh10/215.png”},
+{id:“neo1-16”,name:“Umbreon”,number:“16”,set:“Neo Discovery”,series:“Neo”,rarity:“Rare Holo”,types:[“Finsternis”],hp:“80”,basePrice:90,img:“https://images.pokemontcg.io/neo1/16.png”},
+{id:“sv3pt5-210”,name:“Eevee”,number:“210”,set:“151”,series:“Scarlet & Violet”,rarity:“Special Illustration Rare”,types:[“Farblos”],hp:“60”,basePrice:40,img:“https://images.pokemontcg.io/sv3pt5/210.png”},
+{id:“sv3pt5-133”,name:“Eevee”,number:“133”,set:“151”,series:“Scarlet & Violet”,rarity:“Common”,types:[“Farblos”],hp:“60”,basePrice:0.5,img:“https://images.pokemontcg.io/sv3pt5/133.png”},
+{id:“swsh7-108”,name:“Rayquaza VMAX”,number:“108”,set:“Evolving Skies”,series:“Sword & Shield”,rarity:“Rare Rainbow”,types:[“Drache”],hp:“320”,basePrice:95,img:“https://images.pokemontcg.io/swsh7/108.png”},
+{id:“swsh7-217”,name:“Rayquaza VMAX”,number:“217”,set:“Evolving Skies”,series:“Sword & Shield”,rarity:“Rare Secret”,types:[“Drache”],hp:“320”,basePrice:180,img:“https://images.pokemontcg.io/swsh7/217.png”},
+{id:“sv3pt5-150”,name:“Mewtwo ex”,number:“150”,set:“151”,series:“Scarlet & Violet”,rarity:“Rare Holo EX”,types:[“Psycho”],hp:“330”,basePrice:20,img:“https://images.pokemontcg.io/sv3pt5/150.png”},
+{id:“sv3pt5-205”,name:“Mewtwo ex”,number:“205”,set:“151”,series:“Scarlet & Violet”,rarity:“Special Illustration Rare”,types:[“Psycho”],hp:“330”,basePrice:110,img:“https://images.pokemontcg.io/sv3pt5/205.png”},
+{id:“base1-10”,name:“Mewtwo”,number:“10”,set:“Base Set”,series:“Base”,rarity:“Rare Holo”,types:[“Psycho”],hp:“60”,basePrice:120,img:“https://images.pokemontcg.io/base1/10.png”},
+{id:“swsh10-186”,name:“Lugia VSTAR”,number:“186”,set:“Silver Tempest”,series:“Sword & Shield”,rarity:“Rare Secret”,types:[“Farblos”],hp:“270”,basePrice:70,img:“https://images.pokemontcg.io/swsh10/186.png”},
+{id:“sv4-86”,name:“Gardevoir ex”,number:“86”,set:“Paradox Rift”,series:“Scarlet & Violet”,rarity:“Rare Holo EX”,types:[“Psycho”],hp:“310”,basePrice:14,img:“https://images.pokemontcg.io/sv4/86.png”},
+{id:“sv4-237”,name:“Gardevoir ex”,number:“237”,set:“Paradox Rift”,series:“Scarlet & Violet”,rarity:“Special Illustration Rare”,types:[“Psycho”],hp:“310”,basePrice:95,img:“https://images.pokemontcg.io/sv4/237.png”},
+{id:“sv1-252”,name:“Miraidon ex”,number:“252”,set:“Scarlet & Violet”,series:“Scarlet & Violet”,rarity:“Special Illustration Rare”,types:[“Elektro”],hp:“220”,basePrice:75,img:“https://images.pokemontcg.io/sv1/252.png”},
+{id:“sv1-254”,name:“Koraidon ex”,number:“254”,set:“Scarlet & Violet”,series:“Scarlet & Violet”,rarity:“Special Illustration Rare”,types:[“Kampf”],hp:“230”,basePrice:60,img:“https://images.pokemontcg.io/sv1/254.png”},
+{id:“sv4-245”,name:“Dragapult ex”,number:“245”,set:“Paradox Rift”,series:“Scarlet & Violet”,rarity:“Special Illustration Rare”,types:[“Drache”],hp:“320”,basePrice:130,img:“https://images.pokemontcg.io/sv4/245.png”},
+{id:“sv4-229”,name:“Roaring Moon ex”,number:“229”,set:“Paradox Rift”,series:“Scarlet & Violet”,rarity:“Special Illustration Rare”,types:[“Finsternis”],hp:“230”,basePrice:80,img:“https://images.pokemontcg.io/sv4/229.png”},
+{id:“base1-2”,name:“Blastoise”,number:“2”,set:“Base Set”,series:“Base”,rarity:“Rare Holo”,types:[“Wasser”],hp:“100”,basePrice:200,img:“https://images.pokemontcg.io/base1/2.png”},
+{id:“sv3pt5-9”,name:“Blastoise ex”,number:“9”,set:“151”,series:“Scarlet & Violet”,rarity:“Rare Holo EX”,types:[“Wasser”],hp:“330”,basePrice:18,img:“https://images.pokemontcg.io/sv3pt5/9.png”},
+{id:“base1-15”,name:“Venusaur”,number:“15”,set:“Base Set”,series:“Base”,rarity:“Rare Holo”,types:[“Pflanze”],hp:“100”,basePrice:180,img:“https://images.pokemontcg.io/base1/15.png”},
+{id:“sv3pt5-3”,name:“Venusaur ex”,number:“3”,set:“151”,series:“Scarlet & Violet”,rarity:“Rare Holo EX”,types:[“Pflanze”],hp:“340”,basePrice:16,img:“https://images.pokemontcg.io/sv3pt5/3.png”},
+{id:“swsh9-214”,name:“Dialga VSTAR”,number:“214”,set:“Astral Radiance”,series:“Sword & Shield”,rarity:“Rare Rainbow”,types:[“Metall”],hp:“270”,basePrice:30,img:“https://images.pokemontcg.io/swsh9/214.png”},
+{id:“swsh3-117”,name:“Eternatus VMAX”,number:“117”,set:“Darkness Ablaze”,series:“Sword & Shield”,rarity:“Rare Ultra”,types:[“Finsternis”],hp:“340”,basePrice:20,img:“https://images.pokemontcg.io/swsh3/117.png”},
+{id:“sv3pt5-130”,name:“Gyarados ex”,number:“130”,set:“151”,series:“Scarlet & Violet”,rarity:“Rare Holo EX”,types:[“Wasser”],hp:“330”,basePrice:18,img:“https://images.pokemontcg.io/sv3pt5/130.png”},
+{id:“sv4-130”,name:“Dragapult ex”,number:“130”,set:“Paradox Rift”,series:“Scarlet & Violet”,rarity:“Rare Holo EX”,types:[“Drache”],hp:“320”,basePrice:20,img:“https://images.pokemontcg.io/sv4/130.png”},
+{id:“swsh10-211”,name:“Lugia VSTAR”,number:“211”,set:“Silver Tempest”,series:“Sword & Shield”,rarity:“Rare Rainbow”,types:[“Farblos”],hp:“270”,basePrice:85,img:“https://images.pokemontcg.io/swsh10/211.png”},
+{id:“sv6-191”,name:“Terapagos ex”,number:“191”,set:“Twilight Masquerade”,series:“Scarlet & Violet”,rarity:“Special Illustration Rare”,types:[“Farblos”],hp:“230”,basePrice:70,img:“https://images.pokemontcg.io/sv6/191.png”},
+{id:“swsh8-271”,name:“Gengar VMAX”,number:“271”,set:“Fusion Strike”,series:“Sword & Shield”,rarity:“Rare Rainbow”,types:[“Psycho”],hp:“330”,basePrice:25,img:“https://images.pokemontcg.io/swsh8/271.png”},
+{id:“sv2-236”,name:“Iono”,number:“236”,set:“Paldea Evolved”,series:“Scarlet & Violet”,rarity:“Special Illustration Rare”,types:[],hp:””,basePrice:85,img:“https://images.pokemontcg.io/sv2/236.png”},
+{id:“swsh1-178”,name:“Marnie”,number:“178”,set:“Sword & Shield”,series:“Sword & Shield”,rarity:“Rare Ultra”,types:[],hp:””,basePrice:25,img:“https://images.pokemontcg.io/swsh1/178.png”},
+];
+
+function searchBuiltin(q){
+if(!q.trim())return[];
+const terms=q.toLowerCase().trim().split(/\s+/);
+return BUILTIN.filter(c=>{
+const hay=`${c.name} ${c.set} ${c.series} ${c.number} ${c.rarity} ${c.types.join(" ")}`.toLowerCase();
+return terms.every(t=>hay.includes(t));
+});
+}
+
+function Sparkline({h}){
+if(!h||h.length<2)return null;
+const ps=h.map(x=>x.p),mn=Math.min(…ps),mx=Math.max(…ps),rng=mx-mn||1;
+const W=60,H=20;
+const pts=ps.map((p,i)=>`${(i/(ps.length-1))*W},${H-((p-mn)/rng)*H}`).join(” “);
+return React.createElement(“svg”,{width:W,height:H},
+React.createElement(“polyline”,{points:pts,fill:“none”,stroke:ps[ps.length-1]>=ps[0]?”#34d399”:”#f87171”,strokeWidth:“1.5”,strokeLinejoin:“round”})
+);
+}
+function Delta({h}){
+if(!h||h.length<2)return null;
+const pct=((h[h.length-1].p-h[0].p)/h[0].p)*100,up=pct>=0;
+return React.createElement(“span”,{style:{fontSize:11,fontWeight:700,padding:“2px 7px”,borderRadius:20,background:up?“rgba(52,211,153,.15)”:“rgba(248,113,113,.15)”,color:up?”#34d399”:”#f87171”}},
+(up?“▲”:“▼”)+” “+Math.abs(pct).toFixed(1)+”%”
+);
+}
+
+const RC={“Common”:”#9ca3af”,“Uncommon”:”#34d399”,“Rare”:”#60a5fa”,“Rare Holo”:”#a78bfa”,“Rare Holo EX”:”#f472b6”,“Rare Ultra”:”#fb923c”,“Rare Secret”:”#fbbf24”,“Special Illustration Rare”:”#ff6b6b”,“Hyper Rare”:”#ffd700”,“Amazing Rare”:”#e879f9”,“Rare Rainbow”:”#c084fc”};
+const rClr=r=>RC[r]||”#9ca3af”;
+const G=“linear-gradient(135deg,#6366f1,#f472b6)”;
+const CS={background:“rgba(255,255,255,0.04)”,borderRadius:16,border:“1px solid rgba(255,255,255,0.08)”};
+
+function Bdg({label,color}){
+return React.createElement(“span”,{style:{display:“inline-block”,fontSize:10,padding:“2px 8px”,borderRadius:20,background:color+“22”,color,fontWeight:800,marginRight:4,marginBottom:4}},label);
+}
+
+function App(){
+const [view,setView]=useState(“search”);
+const [q,setQ]=useState(””);
+const [results,setResults]=useState([]);
+const [loading,setLoading]=useState(false);
+const [apiOk,setApiOk]=useState(null);
+const [page,setPage]=useState(1);
+const [totalCount,setTotalCount]=useState(0);
+const [col,setCol]=useState(()=>{try{return JSON.parse(localStorage.getItem(“pv7”)||”[]”);}catch{return[];}});
+const [detail,setDetail]=useState(null);
+const [lang,setLang]=useState(“Deutsch”);
+const [note,setNote]=useState(””);
+const [lastUp,setLastUp]=useState(()=>localStorage.getItem(“pv7_up”)||””);
+
+useEffect(()=>{localStorage.setItem(“pv7”,JSON.stringify(col));},[col]);
+const toast=m=>{setNote(m);setTimeout(()=>setNote(””),2600);};
+
+useEffect(()=>{
+const today=new Date().toDateString();
+if(lastUp===today)return;
+setCol(prev=>prev.map(c=>({…c,…buildPrices(c.basePrice||2)})));
+localStorage.setItem(“pv7_up”,today);setLastUp(today);
+},[]);
+
+const testAPI=async()=>{
+try{
+const r=await fetch(“https://api.pokemontcg.io/v2/cards?q=name:Pikachu&pageSize=1”);
+if(r.ok){setApiOk(true);return true;}
+}catch{}
+setApiOk(false);return false;
+};
+
+const fetchFromAPI=async(searchQ,pg=1)=>{
+const parts=searchQ.trim().split(/\s+/);
+const lastNum=parseInt(parts[parts.length-1]);
+let apiQ=`name:"${searchQ.trim()}"`;
+if(!isNaN(lastNum)&&parts.length>1){
+apiQ=`name:"${parts.slice(0,-1).join(" ")}" number:${lastNum}`;
+}
+const url=`https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(apiQ)}&page=${pg}&pageSize=20&orderBy=-set.releaseDate`;
+const res=await fetch(url);
+if(!res.ok)throw new Error(“err”);
+return res.json();
+};
+
+const doSearch=async()=>{
+if(!q.trim())return;
+setLoading(true);setResults([]);setPage(1);
+let works=apiOk;
+if(works===null)works=await testAPI();
+if(works){
+try{
+const data=await fetchFromAPI(q,1);
+setTotalCount(data.totalCount||0);
+setResults(data.data||[]);
+if(!data.data?.length){const bi=searchBuiltin(q);setResults(bi);setTotalCount(bi.length);}
+}catch{
+setApiOk(false);
+const bi=searchBuiltin(q);setResults(bi);setTotalCount(bi.length);
+}
+}else{
+const bi=searchBuiltin(q);setResults(bi);setTotalCount(bi.length);
+if(!bi.length)toast(“Keine Karten gefunden.”);
+}
+setLoading(false);
+};
+
+const loadMore=async()=>{
+if(!apiOk)return;
+setLoading(true);
+const next=page+1;setPage(next);
+try{const data=await fetchFromAPI(q,next);setResults(prev=>[…prev,…(data.data||[])]);}catch{}
+setLoading(false);
+};
+
+const normalizeCard=card=>({
+id:card.id,name:card.name,number:card.number,
+set:card.set?.name||card.set||””,series:card.set?.series||card.series||””,
+rarity:card.rarity||””,types:card.types||[],hp:card.hp||””,
+img:card.images?.large||card.images?.small||card.img||””,
+basePrice:getBasePrice(card)||2,
+});
+
+const addCard=card=>{
+const nc=normalizeCard(card);
+if(col.find(c=>c.id===nc.id)){toast(“⚠️ Bereits in Sammlung!”);return;}
+const {prices,history}=buildPrices(nc.basePrice);
+setCol(prev=>[…prev,{…nc,prices,history,addedAt:Date.now()}]);
+toast(“✅ “+nc.name+” hinzugefügt!”);
+};
+
+const removeCard=id=>{
+setCol(prev=>prev.filter(c=>c.id!==id));
+toast(“🗑️ Entfernt.”);
+if(detail?.id===id){setDetail(null);setView(“collection”);}
+};
+
+const totalVal=col.reduce((s,c)=>s+(c.prices?.[lang]||0),0);
+const inCol=id=>col.find(c=>c.id===id);
+const getImg=card=>card.images?.large||card.images?.small||card.img||””;
+const openDetail=card=>{setDetail(col.find(c=>c.id===card.id)||card);setView(“detail”);};
+const hasMore=apiOk&&results.length<totalCount&&results.length>0;
+
+const e=React.createElement;
+
+return e(“div”,{style:{minHeight:“100vh”,background:”#08080f”,fontFamily:”‘Rajdhani’,‘Segoe UI’,sans-serif”,color:”#e2e8f0”}},
+// BG
+e(“div”,{style:{position:“fixed”,inset:0,zIndex:0,pointerEvents:“none”,background:“radial-gradient(ellipse at 15% 15%,rgba(99,102,241,.13) 0%,transparent 55%),radial-gradient(ellipse at 85% 85%,rgba(244,63,94,.09) 0%,transparent 55%)”}}),
+// Toast
+note&&e(“div”,{style:{position:“fixed”,top:16,left:“50%”,zIndex:9999,animation:“fadein .3s”,background:“rgba(10,10,20,.97)”,border:“1px solid rgba(255,255,255,.13)”,borderRadius:14,padding:“12px 26px”,fontWeight:700,fontSize:15,boxShadow:“0 8px 40px rgba(0,0,0,.6)”,color:”#e2e8f0”,whiteSpace:“nowrap”,transform:“translateX(-50%)”}},note),
+// Content
+e(“div”,{style:{position:“relative”,zIndex:1,maxWidth:900,margin:“0 auto”,padding:“0 14px 80px”}},
+
+```
+  // HEADER
+  e("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 0 14px",borderBottom:"1px solid rgba(255,255,255,.07)"}},
+    e("div",{style:{display:"flex",alignItems:"center",gap:10}},
+      e("span",{style:{fontSize:26}},"⚡"),
+      e("span",{style:{fontSize:26,fontWeight:900,letterSpacing:1,background:"linear-gradient(135deg,#818cf8,#f472b6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},"PokéVault")
+    ),
+    e("div",{style:{display:"flex",gap:8}},
+      [["search","🔍 Suche"],["collection","📦"+(col.length?" ("+col.length+")":"")]].map(([v,lbl])=>
+        e("button",{key:v,onClick:()=>setView(v),style:{padding:"8px 14px",borderRadius:10,border:"none",cursor:"pointer",fontWeight:700,fontSize:13,background:view===v?G:"rgba(255,255,255,.07)",color:view===v?"#fff":"#94a3b8",fontFamily:"inherit"}},lbl)
+      )
+    )
+  ),
+
+  // SEARCH VIEW
+  view==="search"&&e("div",null,
+    e("div",{style:{marginTop:20,marginBottom:16}},
+      apiOk===false&&e("div",{style:{background:"rgba(251,191,36,.08)",border:"1px solid rgba(251,191,36,.2)",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:13,color:"#fbbf24"}},
+        "⚠️ Offline-Modus · "+BUILTIN.length+" eingebaute Karten"
+      ),
+      apiOk===true&&e("div",{style:{background:"rgba(52,211,153,.08)",border:"1px solid rgba(52,211,153,.2)",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:13,color:"#34d399"}},
+        "✅ Live · alle 15.000+ Karten verfügbar!"
+      ),
+      e("div",{style:{fontSize:13,color:"#475569",marginBottom:10}},"Suche nach jedem Pokémon, Set oder Nummer"),
+      e("div",{style:{display:"flex",gap:10}},
+        e("input",{style:{flex:1,padding:"13px 18px",borderRadius:12,border:"1.5px solid rgba(255,255,255,.1)",background:"rgba(255,255,255,.05)",color:"#e2e8f0",fontSize:16,outline:"none",fontFamily:"inherit"},
+          placeholder:"z.B. Mew ex, Charizard, Pikachu 94...",value:q,
+          onChange:ev=>setQ(ev.target.value),onKeyDown:ev=>ev.key==="Enter"&&doSearch()}),
+        e("button",{onClick:doSearch,style:{padding:"13px 22px",borderRadius:12,border:"none",cursor:"pointer",fontWeight:800,fontSize:15,background:G,color:"#fff",fontFamily:"inherit"}},"Suchen")
+      )
+    ),
+    loading&&results.length===0&&e("div",{style:{textAlign:"center",padding:"50px 20px"}},
+      e("div",{style:{width:40,height:40,border:"3px solid rgba(99,102,241,.3)",borderTopColor:"#6366f1",borderRadius:"50%",animation:"spin .8s linear infinite",margin:"0 auto 16px"}}),
+      e("div",{style:{color:"#818cf8",fontWeight:700,fontSize:16}},"Suche Karten...")
+    ),
+    results.length>0&&e("div",null,
+      e("div",{style:{fontSize:13,color:"#475569",marginBottom:14}},
+        (apiOk?totalCount+" Karten gefunden · ":"")+results.length+" geladen"
+      ),
+      e("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:14}},
+        results.map(card=>{
+          const already=inCol(card.id);
+          const price=getBasePrice(card);
+          const img=getImg(card);
+          return e("div",{key:card.id,className:"ch",onClick:()=>openDetail(card),style:{...CS,overflow:"hidden"}},
+            e("div",{style:{background:"rgba(0,0,0,.4)",aspectRatio:"3/4",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}},
+              img?e("img",{src:img,alt:card.name,style:{width:"100%",height:"100%",objectFit:"contain"},
+                onError:ev=>{ev.target.style.display="none";ev.target.parentNode.innerHTML='<div style="font-size:44px;color:#334155;display:flex;align-items:center;justify-content:center;height:100%">🃏</div>';}}):
+              e("div",{style:{fontSize:44,color:"#334155"}},"🃏")
+            ),
+            e("div",{style:{padding:"10px 12px 12px"}},
+              e("div",{style:{fontWeight:800,fontSize:13,marginBottom:3,lineHeight:1.2}},card.name),
+              e("div",{style:{fontSize:10,color:"#475569",marginBottom:6}},(card.set?.name||card.set)+" · #"+card.number),
+              e(Bdg,{label:card.rarity||"—",color:rClr(card.rarity)}),
+              e("div",{style:{fontSize:13,fontWeight:800,color:"#818cf8",margin:"5px 0 7px"}},"~"+price.toFixed(2)+" €"),
+              e("button",{onClick:ev=>{ev.stopPropagation();addCard(card);},style:{width:"100%",padding:"6px 0",borderRadius:8,border:"none",cursor:"pointer",fontWeight:800,fontSize:12,background:already?"rgba(52,211,153,.15)":G,color:already?"#34d399":"#fff",fontFamily:"inherit"}},
+                already?"✓ Gesammelt":"+ Sammeln"
+              )
+            )
+          );
+        })
+      ),
+      hasMore&&e("div",{style:{textAlign:"center",marginTop:24}},
+        e("button",{onClick:loadMore,disabled:loading,style:{padding:"12px 32px",borderRadius:12,border:"none",cursor:"pointer",fontWeight:800,fontSize:15,background:loading?"rgba(255,255,255,.08)":G,color:"#fff",fontFamily:"inherit"}},
+          loading?"Laden...":"Mehr laden"
+        )
+      )
+    )
+  ),
+
+  // COLLECTION VIEW
+  view==="collection"&&e("div",null,
+    e("div",{style:{...CS,padding:"16px 20px",margin:"20px 0 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}},
+      e("div",null,
+        e("div",{style:{fontSize:12,color:"#475569",marginBottom:4}},"Gesamtwert · "+lang),
+        e("div",{style:{fontSize:32,fontWeight:900,background:"linear-gradient(135deg,#818cf8,#34d399)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},totalVal.toFixed(2)+" €"),
+        e("div",{style:{fontSize:12,color:"#475569",marginTop:2}},col.length+" Karten")
+      ),
+      e("select",{value:lang,onChange:ev=>setLang(ev.target.value),style:{padding:"8px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,.12)",background:"rgba(255,255,255,.07)",color:"#e2e8f0",fontSize:14,fontFamily:"inherit",cursor:"pointer"}},
+        LANGUAGES.map(l=>e("option",{key:l},l))
+      )
+    ),
+    col.length===0?
+      e("div",{style:{textAlign:"center",padding:"60px 20px"}},
+        e("div",{style:{fontSize:56}},"📦"),
+        e("div",{style:{fontSize:20,fontWeight:800,marginTop:16,color:"#475569"}},"Sammlung leer"),
+        e("div",{style:{fontSize:14,marginTop:8,color:"#334155"}},"Suche nach Karten und sammle sie!"),
+        e("button",{onClick:()=>setView("search"),style:{marginTop:24,padding:"12px 28px",borderRadius:12,border:"none",cursor:"pointer",fontWeight:800,fontSize:15,background:G,color:"#fff",fontFamily:"inherit"}},"Zur Suche")
+      ):
+      e("div",{style:{display:"flex",flexDirection:"column",gap:10}},
+        col.map(card=>{
+          const price=card.prices?.[lang]||0;
+          const hist=card.history?.[lang];
+          return e("div",{key:card.id,className:"rh",onClick:()=>openDetail(card),style:{...CS,display:"flex",gap:14,padding:12,transition:"all .2s",alignItems:"center"}},
+            e("div",{style:{width:60,height:84,background:"rgba(0,0,0,.3)",borderRadius:8,overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}},
+              card.img?e("img",{src:card.img,alt:card.name,style:{width:"100%",height:"100%",objectFit:"contain"},onError:ev=>{ev.target.style.display="none";}}):
+              e("span",{style:{fontSize:30,color:"#334155"}},"🃏")
+            ),
+            e("div",{style:{flex:1,minWidth:0}},
+              e("div",{style:{fontWeight:800,fontSize:16}},card.name),
+              e("div",{style:{fontSize:12,color:"#475569",marginBottom:8}},card.set+" · #"+card.number),
+              e("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
+                e("span",{style:{fontWeight:900,fontSize:20,color:"#818cf8"}},price.toFixed(2)+" €"),
+                e(Delta,{h:hist}),
+                e(Sparkline,{h:hist})
+              )
+            ),
+            e("div",{style:{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end",flexShrink:0}},
+              e(Bdg,{label:card.rarity||"—",color:rClr(card.rarity)}),
+              e("button",{onClick:ev=>{ev.stopPropagation();removeCard(card.id);},style:{padding:"5px 10px",borderRadius:8,border:"none",cursor:"pointer",background:"rgba(248,113,113,.15)",color:"#f87171",fontSize:13,fontFamily:"inherit"}},"🗑️")
+            )
+          );
+        })
+      )
+  ),
+
+  // DETAIL VIEW
+  view==="detail"&&detail&&e("div",{style:{marginTop:24}},
+    e("button",{onClick:()=>setView(inCol(detail.id)?"collection":"search"),style:{background:"none",border:"none",color:"#818cf8",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:20,display:"flex",alignItems:"center",gap:6,fontFamily:"inherit"}},"← Zurück"),
+    e("div",{style:{display:"grid",gridTemplateColumns:"auto 1fr",gap:20,alignItems:"start"}},
+      e("div",{style:{width:160,height:224,background:"rgba(0,0,0,.4)",borderRadius:14,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 48px rgba(0,0,0,.7)",flexShrink:0}},
+        getImg(detail)?e("img",{src:getImg(detail),alt:detail.name,style:{width:"100%",height:"100%",objectFit:"contain"},onError:ev=>{ev.target.style.display="none";}}):
+        e("span",{style:{fontSize:60,color:"#334155"}},"🃏")
+      ),
+      e("div",null,
+        e("div",{style:{fontSize:26,fontWeight:900,lineHeight:1.1,marginBottom:6}},detail.name),
+        e("div",{style:{fontSize:13,color:"#475569",marginBottom:14}},(detail.set?.name||detail.set)+" · #"+detail.number),
+        e("div",{style:{marginBottom:16}},
+          e(Bdg,{label:detail.rarity||"—",color:rClr(detail.rarity)}),
+          ...(detail.types||[]).map(t=>e(Bdg,{key:t,label:t,color:"#60a5fa"})),
+          detail.hp?e(Bdg,{label:"HP "+detail.hp,color:"#fb923c"}):null
+        ),
+        e("div",{style:{fontSize:13,fontWeight:800,color:"#64748b",marginBottom:10}},"💰 Preise nach Sprache"),
+        e("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:14}},
+          e("thead",null,
+            e("tr",{style:{color:"#475569",fontSize:12}},
+              ["Sprache","Preis","30d","Chart"].map(h=>e("th",{key:h,style:{textAlign:h==="Sprache"?"left":"right",padding:"6px 8px",fontWeight:700}},h))
+            )
+          ),
+          e("tbody",null,
+            LANGUAGES.map(l=>{
+              const colCard=col.find(c=>c.id===detail.id);
+              const base=colCard?.basePrice||getBasePrice(detail)||2;
+              const p=colCard?.prices?.[l]||genPrice(base,l);
+              const h=colCard?.history?.[l];
+              return e("tr",{key:l,style:{borderTop:"1px solid rgba(255,255,255,.05)",background:l===lang?"rgba(99,102,241,.07)":"transparent"}},
+                e("td",{style:{padding:"9px 8px",fontWeight:l===lang?800:600}},l),
+                e("td",{style:{textAlign:"right",padding:"9px 8px",fontWeight:900,color:"#818cf8"}},p.toFixed(2)+" €"),
+                e("td",{style:{textAlign:"right",padding:"9px 8px"}},e(Delta,{h})),
+                e("td",{style:{textAlign:"right",padding:"9px 8px"}},e(Sparkline,{h}))
+              );
+            })
+          )
+        ),
+        e("div",{style:{marginTop:22}},
+          !inCol(detail.id)?
+            e("button",{onClick:()=>addCard(detail),style:{padding:"12px 24px",borderRadius:12,border:"none",cursor:"pointer",fontWeight:800,fontSize:15,background:G,color:"#fff",fontFamily:"inherit"}},"+ Zur Sammlung"):
+            e("button",{onClick:()=>removeCard(detail.id),style:{padding:"12px 24px",borderRadius:12,border:"none",cursor:"pointer",fontWeight:800,fontSize:15,background:"rgba(248,113,113,.15)",color:"#f87171",fontFamily:"inherit"}},"🗑️ Aus Sammlung entfernen")
+        )
+      )
+    )
+  )
+)
+```
+
+);
+}
+
+ReactDOM.createRoot(document.getElementById(“root”)).render(React.createElement(App));
+</script>
+
+</body>
+</html>
